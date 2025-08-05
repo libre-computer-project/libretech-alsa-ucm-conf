@@ -1,6 +1,24 @@
 #
 #
 
+SectionDevice."HDMI" {
+	Comment "HDMI"
+
+	EnableSequence [
+		cdev "hw:0"
+		cset "name='AIU HDMI CTRL SRC' I2S"
+		cset "name='AIU SPDIF SRC SEL' SPDIF"
+	]
+	DisableSequence [
+		cdev "hw:0"
+		cset "name='AIU HDMI CTRL SRC' DISABLED"
+	]
+	Value {
+		PlaybackPriority 100
+		PlaybackPCM "hw:0"
+	}
+}
+
 SectionDevice."Line" {
 	Comment "Analog Lineout"
 
@@ -23,23 +41,5 @@ SectionDevice."Line" {
 		PlaybackChannels 2
 		PlaybackVolume "ACODEC Playback Volume"
 		PlaybackMixerElem "ACODEC"
-	}
-}
-
-SectionDevice."HDMI" {
-	Comment "HDMI"
-
-	EnableSequence [
-		cdev "hw:0"
-		cset "name='AIU HDMI CTRL SRC' I2S"
-		cset "name='AIU SPDIF SRC SEL' SPDIF"
-	]
-	DisableSequence [
-		cdev "hw:0"
-		cset "name='AIU HDMI CTRL SRC' DISABLED"
-	]
-	Value {
-		PlaybackPriority 100
-		PlaybackPCM "hw:0"
 	}
 }
