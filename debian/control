@@ -1,0 +1,9 @@
+Source: libretech-alsa-ucm-conf
+Section: libs
+Priority: optional
+Maintainer: Da Xue <da@libre.computer>
+Build-Depends: debhelper (>= 9)
+
+Package: libretech-alsa-ucm-conf
+Architecture: all
+Description: Libre Computer ALSA UCM conf
