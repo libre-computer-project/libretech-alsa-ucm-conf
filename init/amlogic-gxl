@@ -1,0 +1,13 @@
+# Configuration for gx-sound-card driver
+
+CARDINFO{driver}=="gx-sound-card", \
+  GOTO="HiFi"
+RESULT="false", EXIT="return"
+ 
+LABEL="HiFi"
+# playback
+CTL{reset}="mixer"
+CTL{name}="AIU HDMI CTRL SRC", CTL{values}="I2S"
+CTL{name}="AIU SPDIF SRC SEL", CTL{values}="SPDIF"
+RESULT="true", EXIT="return"
+
