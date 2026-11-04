@@ -1,0 +1,38 @@
+# Paths held at the last upstream release whose UCM is Syntax <= 7 (v1.2.14),
+# so the package loads on alsa-lib 1.2.14 (Debian 13 without backports).
+# Upstream moved exactly these families to Syntax 8 in 1.2.15; every other
+# path follows the upstream base. One path per line; a directory is pinned as
+# a whole (files upstream added since are removed, files it removed come back).
+# Drop an entry (and eventually this file) once the oldest alsa-lib we ship
+# parses Syntax 8 (alsa-lib >= 1.2.15).
+
+# the two Syntax-8 families
+ucm2/USB-Audio
+ucm2/sof-soundwire
+
+# shared files only those families include
+ucm2/common/direct.conf
+ucm2/common/direct-verb.conf
+ucm2/common/directm.conf
+ucm2/common/pcm/split.conf
+
+# SoundWire codec configs, reached only through sof-soundwire's /codecs/${var:...}
+ucm2/codecs/acp-dmic
+ucm2/codecs/cs35l56
+ucm2/codecs/cs35l56+cs42l43-spk
+ucm2/codecs/cs42l43
+ucm2/codecs/cs42l43-dmic
+ucm2/codecs/cs42l43-spk
+ucm2/codecs/cs42l43-spk+cs35l56
+ucm2/codecs/cs42l45
+ucm2/codecs/cs42l45-dmic
+ucm2/codecs/cs47l47
+ucm2/codecs/cs47l47-dmic
+ucm2/codecs/rt1320
+ucm2/codecs/rt712
+ucm2/codecs/rt712-dmic
+ucm2/codecs/rt713
+ucm2/codecs/rt713-dmic
+ucm2/codecs/rt713-sdca
+ucm2/codecs/rt721
+ucm2/codecs/rt722
