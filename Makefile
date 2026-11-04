@@ -1,12 +1,12 @@
 PREFIX ?= /usr/share/alsa
-STAGING ?= /usr/share/libretech-alsa-ucm-conf
 
+# The whole tree is the system UCM: upstream alsa-ucm-conf (the base this fork
+# is rebased on), the compat pins (compat/), and the Libre Computer profiles.
 install:
 	mkdir -p $(DESTDIR)$(PREFIX)/init $(DESTDIR)$(PREFIX)/ucm $(DESTDIR)$(PREFIX)/ucm2
-	mkdir -p $(DESTDIR)$(STAGING)/ucm2/Amlogic
 	cp -r init/* $(DESTDIR)$(PREFIX)/init/
 	cp -r ucm/* $(DESTDIR)$(PREFIX)/ucm/
 	cp -r ucm2/* $(DESTDIR)$(PREFIX)/ucm2/
-	# Move p241 to staging for conditional install via postinst
-	rm -rf $(DESTDIR)$(PREFIX)/ucm2/Amlogic/p241
-	cp -r ucm2/Amlogic/p241 $(DESTDIR)$(STAGING)/ucm2/Amlogic/
+	# as Debian's alsa-ucm-conf packaging does: no VCS placeholder, no exec bits
+	rm -f $(DESTDIR)$(PREFIX)/ucm2/conf.virt.d/.gitignore
+	find $(DESTDIR)$(PREFIX)/ucm $(DESTDIR)$(PREFIX)/ucm2 -type f -exec chmod 0644 {} +

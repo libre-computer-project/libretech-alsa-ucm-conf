@@ -6,4 +6,12 @@ Build-Depends: debhelper (>= 9)
 
 Package: libretech-alsa-ucm-conf
 Architecture: all
-Description: Libre Computer ALSA UCM conf
+Multi-Arch: foreign
+Depends: libasound2t64 (>= 1.2.14)
+Provides: alsa-ucm-conf (= 1.2.16.1)
+Conflicts: alsa-ucm-conf
+Replaces: alsa-ucm-conf
+Description: ALSA Use Case Manager configuration (Libre Computer)
+ Upstream alsa-ucm-conf with the Libre Computer board profiles on top. It
+ replaces Debian's alsa-ucm-conf. The USB-Audio and sof-soundwire profile
+ families are held at upstream 1.2.14 so the tree loads on alsa-lib 1.2.14.
