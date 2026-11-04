@@ -1,14 +1,19 @@
 # Paths held at the last upstream release whose UCM is Syntax <= 7 (v1.2.14),
 # so the package loads on alsa-lib 1.2.14 (Debian 13 without backports).
-# Upstream moved exactly these families to Syntax 8 in 1.2.15; every other
-# path follows the upstream base. One path per line; a directory is pinned as
-# a whole (files upstream added since are removed, files it removed come back).
-# Drop an entry (and eventually this file) once the oldest alsa-lib we ship
-# parses Syntax 8 (alsa-lib >= 1.2.15).
+# Upstream moved exactly these families to Syntax 8 (USB-Audio and
+# sof-soundwire in 1.2.15; HDA and Intel sof-hda-dsp on master after 1.2.16);
+# every other path follows the upstream base. One path per line; a directory is
+# pinned as a whole (files upstream added since are removed, files it removed
+# come back). Drop an entry (and eventually this file) once the oldest alsa-lib
+# we ship parses Syntax 8 (alsa-lib >= 1.2.15).
 
-# the two Syntax-8 families
+# the Syntax-8 families
 ucm2/USB-Audio
 ucm2/sof-soundwire
+ucm2/HDA
+ucm2/Intel/sof-hda-dsp
+ucm2/conf.d/HDA-Intel
+ucm2/conf.d/sof-hda-dsp
 
 # shared files only those families include
 ucm2/common/direct.conf
