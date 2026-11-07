@@ -7,7 +7,8 @@
 #   build-overlay.sh --format deb|rpm|arch [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--out DIR]
 #
 #   overlay         every file HEAD adds over its upstream base (the merge-base with upstream/master) under init/,
-#                   ucm/ and ucm2/: our profiles, nothing upstream ships. For alsa-ucm-conf >= 1.2.11 (Ubuntu 26.04,
+#                   ucm/ and ucm2/, except what the compat pins restore (compat/syntax7-paths.txt: upstream
+#                   v1.2.14 files): our profiles, nothing upstream ships. For alsa-ucm-conf >= 1.2.11 (Ubuntu 26.04,
 #                   Fedora, Arch)
 #   overlay-legacy  the same, plus the upstream files our profiles resolve to that alsa-ucm-conf < 1.2.11 lacks
 #                   (packaging/overlay-legacy.list: Amlogic/p241, which the GXL profile links to). For Debian 12
@@ -24,7 +25,7 @@ IFS=$'\n\t'
 readonly PACKAGE=libretech-alsa-ucm-conf
 readonly MAINTAINER="Da Xue <da@libre.computer>"
 readonly BUILD_HOST=deb.libre.computer   # what a package header names, never the machine that built it
-readonly PACKAGER="autobuild <autobuild@deb.libre.computer>"
+readonly ARCH_PACKAGER="autobuild <autobuild@deb.libre.computer>"   # makepkg's PACKAGER
 readonly PREFIX=usr/share/alsa
 
 log() { printf 'build-overlay: %s\n' "$*" >&2; }
@@ -38,7 +39,13 @@ trap cleanup EXIT
 overlay_paths() {
   local flavour=$1 base
   base=$(git merge-base HEAD upstream/master) || die "no merge-base with upstream/master (fetch the upstream remote)"
-  git diff --name-only --no-renames --diff-filter=A "$base" HEAD -- init ucm ucm2
+  # the compat pins (compat/syntax7-paths.txt) re-add upstream v1.2.14 files for the whole tree: upstream's, not
+  # ours, and a distro package's own copy would clash with them
+  local pins
+  pins=$(git show HEAD:compat/syntax7-paths.txt | grep -v -e '^#' -e '^$')
+  git diff --name-only --no-renames --diff-filter=A "$base" HEAD -- init ucm ucm2 |
+    PINS=$pins awk 'BEGIN { n = split(ENVIRON["PINS"], p, "\n") }
+      { for (i = 1; i <= n; i++) if ($0 == p[i] || index($0, p[i] "/") == 1) next; print }'
   if [[ $flavour == overlay-legacy ]]; then
     grep -v -e '^#' -e '^$' packaging/overlay-legacy.list
   fi
@@ -119,7 +126,7 @@ depends=(alsa-ucm-conf)
 options=(!strip !debug !emptydirs)
 package() { cp -a "\$startdir/root/." "\$pkgdir/"; }
 EOF
-  (cd "$T/arch" && BUILDDIR=$T/arch/b PKGDEST=$T/arch SRCDEST=$T/arch PKGEXT=.pkg.tar.zst PACKAGER=$PACKAGER \
+  (cd "$T/arch" && BUILDDIR=$T/arch/b PKGDEST=$T/arch SRCDEST=$T/arch PKGEXT=.pkg.tar.zst PACKAGER=$ARCH_PACKAGER \
     makepkg --nodeps --noconfirm --force >&2)
   mkdir -p "$out"
   cp "$T/arch/$PACKAGE-$ver-1-any.pkg.tar.zst" "$out/"
@@ -153,8 +160,7 @@ main() {
   ((n > 0)) || die "the overlay is empty"
   mkdir -p "$T/root/$PREFIX"
   git archive HEAD -- "${paths[@]}" | tar -x -C "$T/root/$PREFIX"
-  # every staged path is a regular file or a link that resolves inside the staged tree or to a path the
-  # distribution's own package ships (a link is checked by the install review, not here)
+  # every staged path is a regular file, a link or a directory (whether a link resolves is the install review's)
   local bad
   bad=$(cd "$T/root" && find . ! -type f ! -type l ! -type d | head -1)
   [[ -z $bad ]] || die "staged $bad is not a file or a link"
