@@ -1,0 +1,7 @@
+# Upstream files the overlay-legacy flavour adds (build-overlay.sh): what our profiles resolve to that
+# alsa-ucm-conf < 1.2.11 (Debian 12: 1.2.8, Ubuntu 24.04: 1.2.10) does not ship. Each path must be absent from
+# those releases' own package, or the overlay would clash with it.
+#
+# Amlogic/gxl/gxl.conf links to ../p241/p241.conf (commit 646987c); upstream added Amlogic/p241 in v1.2.11.
+ucm2/Amlogic/p241/p241.conf
+ucm2/Amlogic/p241/p241-HiFi.conf
