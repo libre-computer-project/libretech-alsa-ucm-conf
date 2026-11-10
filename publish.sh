@@ -1,6 +1,8 @@
 #!/bin/bash
-# publish.sh -- publish one built libretech-alsa-ucm-conf package to the
-# deb.libre.computer repository. Publish only: nothing is built.
+# publish.sh -- publish one build of alsa-ucm-conf-libre-computer (source
+# libretech-alsa-ucm-conf: the .changes lists the new package and its
+# transitional libretech-alsa-ucm-conf) to the deb.libre.computer repository.
+# Publish only: nothing is built.
 #
 # Uploads exactly ONE build: the given .changes file and the files it lists
 # (checked against their sha256 sums in it), never whatever else sits in a

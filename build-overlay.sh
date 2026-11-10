@@ -1,5 +1,5 @@
 #!/bin/bash
-# build-overlay.sh -- build the libretech-alsa-ucm-conf OVERLAY: only the Libre Computer profiles, installed beside
+# build-overlay.sh -- build the Libre Computer UCM OVERLAY: only the Libre Computer profiles, installed beside
 # the distribution's own alsa-ucm-conf (Debian/Ubuntu), alsa-ucm (Fedora) or alsa-ucm-conf (Arch), for every
 # distribution whose alsa-lib is not the one the whole tree targets. build.sh builds the whole tree (it replaces
 # alsa-ucm-conf; alsa-lib 1.2.14, Debian 13). Build only: nothing is installed or published.
@@ -18,11 +18,19 @@
 # one name. The package refuses to be built if a staged file is not a regular file or a link inside the tree.
 # Builds exactly the committed HEAD (git archive); run it in this checkout on a build host. The LAST line on stdout
 # is the package's path. infra/libre-computer/packages/multi-distro-packages-plan.md U2.
+#
+# Names (package-naming policy rule 6.4): alsa-ucm-conf-libre-computer (deb, Arch), alsa-ucm-libre-computer (Fedora),
+# renamed from libretech-alsa-ucm-conf (rule 6.5): the deb Breaks/Replaces the old name below this version and --format
+# deb also builds the transitional libretech-alsa-ucm-conf .deb (its path printed on the line before the package's);
+# the rpm Obsoletes + Provides it; the pacman package replaces / conflicts / provides it.
 
 set -euo pipefail
 IFS=$'\n\t'
 
-readonly PACKAGE=libretech-alsa-ucm-conf
+readonly OLD_PACKAGE=libretech-alsa-ucm-conf      # the name before 2026-11-10, every format
+readonly DEB_PACKAGE=alsa-ucm-conf-libre-computer
+readonly RPM_PACKAGE=alsa-ucm-libre-computer
+readonly ARCH_PACKAGE=alsa-ucm-conf-libre-computer
 readonly MAINTAINER="Da Xue <da@libre.computer>"
 readonly BUILD_HOST=deb.libre.computer   # what a package header names, never the machine that built it
 readonly ARCH_PACKAGER="autobuild <autobuild@deb.libre.computer>"   # makepkg's PACKAGER
@@ -56,12 +64,14 @@ deb_package() { # <root> <version> <out>
   commit=$(git rev-parse --short=12 HEAD)
   mkdir -p "$root/DEBIAN"
   cat >"$root/DEBIAN/control" <<EOF
-Package: $PACKAGE
+Package: $DEB_PACKAGE
 Version: $version
 Architecture: all
 Multi-Arch: foreign
 Maintainer: $MAINTAINER
 Depends: alsa-ucm-conf
+Breaks: $OLD_PACKAGE (<< $version)
+Replaces: $OLD_PACKAGE (<< $version)
 Section: libs
 Priority: optional
 Description: ALSA Use Case Manager profiles for Libre Computer boards
@@ -69,9 +79,26 @@ Description: ALSA Use Case Manager profiles for Libre Computer boards
  the distribution's alsa-ucm-conf; no file of it is replaced. Built from
  commit $commit.
 EOF
+  # the transitional package under the old name, for one release: it pulls in the new one and is otherwise empty
+  local troot=$T/transitional
+  mkdir -p "$troot/DEBIAN"
+  cat >"$troot/DEBIAN/control" <<EOF
+Package: $OLD_PACKAGE
+Version: $version
+Architecture: all
+Maintainer: $MAINTAINER
+Depends: $DEB_PACKAGE (= $version)
+Section: oldlibs
+Priority: optional
+Description: transitional package for $DEB_PACKAGE
+ The Libre Computer board profiles are now $DEB_PACKAGE. This package
+ pulls it in and can be removed.
+EOF
   mkdir -p "$out"
-  dpkg-deb --root-owner-group -Zxz --build "$root" "$out/${PACKAGE}_${version}_all.deb" >&2
-  echo "$out/${PACKAGE}_${version}_all.deb"
+  dpkg-deb --root-owner-group -Zxz --build "$troot" "$out/${OLD_PACKAGE}_${version}_all.deb" >&2
+  dpkg-deb --root-owner-group -Zxz --build "$root" "$out/${DEB_PACKAGE}_${version}_all.deb" >&2
+  echo "$out/${OLD_PACKAGE}_${version}_all.deb"
+  echo "$out/${DEB_PACKAGE}_${version}_all.deb"
 }
 
 rpm_package() { # <root> <version> <out>
@@ -82,7 +109,7 @@ rpm_package() { # <root> <version> <out>
     cat <<EOF
 %global debug_package %{nil}
 %global __os_install_post %{nil}
-Name: $PACKAGE
+Name: $RPM_PACKAGE
 Version: $ver
 Release: $rel
 Summary: ALSA Use Case Manager profiles for Libre Computer boards
@@ -91,6 +118,9 @@ URL: https://github.com/libre-computer-project/libretech-alsa-ucm-conf
 BuildArch: noarch
 AutoReqProv: no
 Requires: alsa-ucm
+# renamed from $OLD_PACKAGE (package-naming policy rule 6.5): an upgrade replaces the old name
+Obsoletes: $OLD_PACKAGE < %{version}-%{release}
+Provides: $OLD_PACKAGE = %{version}-%{release}
 
 %description
 The Libre Computer board profiles (Amlogic, MediaTek) alone, installed beside the distribution's alsa-ucm; no file
@@ -102,11 +132,11 @@ cp -a $root/. %{buildroot}/
 %files
 EOF
     (cd "$root" && find . \( -type f -o -type l \) -printf '/%P\n' | sort)
-  } >"$T/rpm/SPECS/$PACKAGE.spec"
-  rpmbuild --quiet --define "_topdir $T/rpm" --define "_buildhost $BUILD_HOST" -bb "$T/rpm/SPECS/$PACKAGE.spec" >&2
+  } >"$T/rpm/SPECS/$RPM_PACKAGE.spec"
+  rpmbuild --quiet --define "_topdir $T/rpm" --define "_buildhost $BUILD_HOST" -bb "$T/rpm/SPECS/$RPM_PACKAGE.spec" >&2
   mkdir -p "$out"
-  cp "$T/rpm/RPMS/noarch/$PACKAGE-$ver-$rel.noarch.rpm" "$out/"
-  echo "$out/$PACKAGE-$ver-$rel.noarch.rpm"
+  cp "$T/rpm/RPMS/noarch/$RPM_PACKAGE-$ver-$rel.noarch.rpm" "$out/"
+  echo "$out/$RPM_PACKAGE-$ver-$rel.noarch.rpm"
 }
 
 arch_package() { # <root> <version> <out>
@@ -115,7 +145,7 @@ arch_package() { # <root> <version> <out>
   mkdir -p "$T/arch"
   cp -a "$root" "$T/arch/root"
   cat >"$T/arch/PKGBUILD" <<EOF
-pkgname=$PACKAGE
+pkgname=$ARCH_PACKAGE
 pkgver=$ver
 pkgrel=1
 pkgdesc='ALSA Use Case Manager profiles for Libre Computer boards'
@@ -123,14 +153,18 @@ arch=(any)
 url='https://github.com/libre-computer-project/libretech-alsa-ucm-conf'
 license=(BSD-3-Clause)
 depends=(alsa-ucm-conf)
+# renamed from $OLD_PACKAGE (package-naming policy rule 6.5)
+provides=("$OLD_PACKAGE=\$pkgver-\$pkgrel")
+conflicts=($OLD_PACKAGE)
+replaces=($OLD_PACKAGE)
 options=(!strip !debug !emptydirs)
 package() { cp -a "\$startdir/root/." "\$pkgdir/"; }
 EOF
   (cd "$T/arch" && BUILDDIR=$T/arch/b PKGDEST=$T/arch SRCDEST=$T/arch PKGEXT=.pkg.tar.zst PACKAGER=$ARCH_PACKAGER \
     makepkg --nodeps --noconfirm --force >&2)
   mkdir -p "$out"
-  cp "$T/arch/$PACKAGE-$ver-1-any.pkg.tar.zst" "$out/"
-  echo "$out/$PACKAGE-$ver-1-any.pkg.tar.zst"
+  cp "$T/arch/$ARCH_PACKAGE-$ver-1-any.pkg.tar.zst" "$out/"
+  echo "$out/$ARCH_PACKAGE-$ver-1-any.pkg.tar.zst"
 }
 
 main() {
@@ -166,7 +200,9 @@ main() {
   [[ -z $bad ]] || die "staged $bad is not a file or a link"
   find "$T/root" -type f -exec chmod 0644 {} +
   find "$T/root" -type d -exec chmod 0755 {} +
-  log "$PACKAGE $version ($flavour, $n files) from $(git rev-parse --short=12 HEAD)"
+  local name
+  case $format in deb) name=$DEB_PACKAGE ;; rpm) name=$RPM_PACKAGE ;; arch) name=$ARCH_PACKAGE ;; esac
+  log "$name $version ($flavour, $n files) from $(git rev-parse --short=12 HEAD)"
   "${format}_package" "$T/root" "$version" "$out"
 }
 

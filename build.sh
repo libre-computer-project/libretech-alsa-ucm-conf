@@ -1,6 +1,7 @@
 #!/bin/bash
-# build.sh -- build the libretech-alsa-ucm-conf .deb. Build only: nothing is
-# installed or published.
+# build.sh -- build the alsa-ucm-conf-libre-computer .deb (and, for one release,
+# the transitional libretech-alsa-ucm-conf .deb that moves hosts with the old
+# name to it). Build only: nothing is installed or published.
 #
 # Builds exactly the committed HEAD: the tree is exported with `git archive`
 # into a temporary directory, so uncommitted edits never reach the package and
@@ -20,7 +21,8 @@
 set -euo pipefail
 
 # --- Constants -------------------------------------------------------------
-readonly PACKAGE="libretech-alsa-ucm-conf"
+readonly SOURCE="libretech-alsa-ucm-conf"        # the source package keeps the project's name
+readonly PACKAGE="alsa-ucm-conf-libre-computer"   # the binary package (package-naming policy rule 6.4)
 readonly MAINTAINER="Da Xue <da@libre.computer>"
 readonly DIST="linux"
 
@@ -72,7 +74,7 @@ main() {
 	mkdir "$TMP/src"
 	git archive HEAD | tar -x -C "$TMP/src"
 	cat > "$TMP/src/debian/changelog" <<-EOF
-	$PACKAGE ($version) $DIST; urgency=medium
+	$SOURCE ($version) $DIST; urgency=medium
 
 	  * $commit
 
@@ -83,10 +85,11 @@ main() {
 	(cd "$TMP/src" && dpkg-buildpackage -uc --no-sign --build=all) >&2
 
 	mkdir -p "$out"
-	mv "$TMP"/"${PACKAGE}_${version}"_* "$out/"
+	# the .changes/.buildinfo and the transitional .deb carry the source name
+	mv "$TMP"/"${SOURCE}_${version}"_* "$TMP"/"${PACKAGE}_${version}"_* "$out/"
 	log "built into $out:"
 	ls -1 "$out" >&2
-	echo "$out/${PACKAGE}_${version}_all.changes"
+	echo "$out/${SOURCE}_${version}_all.changes"
 }
 
 main "$@"

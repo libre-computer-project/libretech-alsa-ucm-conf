@@ -1,5 +1,5 @@
 #!/bin/bash
-# build-publish.sh -- build the libretech-alsa-ucm-conf .deb, then publish that
+# build-publish.sh -- build the alsa-ucm-conf-libre-computer .debs, then publish that
 # build: build.sh, then publish.sh on the .changes file build.sh produced.
 #
 # Options go to the step that owns them: --version to build.sh, --yes to
