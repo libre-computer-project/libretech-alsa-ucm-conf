@@ -35,6 +35,8 @@ deb() { find "$debs" -maxdepth 1 -name "$1_*_all.deb" -print -quit; }
 for p in $NEW $OLD; do
 	[[ -n "$(deb "$p")" ]] || { echo "no $p .deb in $debs" >&2; exit 1; }
 done
+# a package that Depends on the old name keeps it satisfied once the transitional package is gone (rule 6.5)
+check "P: $NEW Provides $OLD at its own version" bash -c "[[ \$(dpkg-deb -f '$(deb $NEW)' Provides) == *'$OLD (= '\$(dpkg-deb -f '$(deb $NEW)' Version)')'* ]]"
 setup() {
 	cp --reflink=auto "$img" "$W/t.img"
 	loop=$(losetup -fP --show "$W/t.img")

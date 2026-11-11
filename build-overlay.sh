@@ -20,7 +20,7 @@
 # is the package's path. infra/libre-computer/packages/multi-distro-packages-plan.md U2.
 #
 # Names (package-naming policy rule 6.4): alsa-ucm-conf-libre-computer (deb, Arch), alsa-ucm-libre-computer (Fedora),
-# renamed from libretech-alsa-ucm-conf (rule 6.5): the deb Breaks/Replaces the old name below this version and --format
+# renamed from libretech-alsa-ucm-conf (rule 6.5): the deb Breaks/Replaces the old name below this version, Provides it, and --format
 # deb also builds the transitional libretech-alsa-ucm-conf .deb (its path printed on the line before the package's);
 # the rpm Obsoletes + Provides it; the pacman package replaces / conflicts / provides it.
 
@@ -72,6 +72,7 @@ Maintainer: $MAINTAINER
 Depends: alsa-ucm-conf
 Breaks: $OLD_PACKAGE (<< $version)
 Replaces: $OLD_PACKAGE (<< $version)
+Provides: $OLD_PACKAGE (= $version)
 Section: libs
 Priority: optional
 Description: ALSA Use Case Manager profiles for Libre Computer boards

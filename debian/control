@@ -8,7 +8,7 @@ Package: alsa-ucm-conf-libre-computer
 Architecture: all
 Multi-Arch: foreign
 Depends: libasound2t64 (>= 1.2.14)
-Provides: alsa-ucm-conf (= 1.2.16.1)
+Provides: alsa-ucm-conf (= 1.2.16.1), libretech-alsa-ucm-conf (= ${binary:Version})
 Conflicts: alsa-ucm-conf
 Breaks: libretech-alsa-ucm-conf (<< ${binary:Version})
 Replaces: alsa-ucm-conf, libretech-alsa-ucm-conf (<< ${binary:Version})
