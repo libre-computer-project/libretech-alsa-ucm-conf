@@ -7,7 +7,7 @@
 #   build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--out DIR]
 #
 #   --format nix    no package: the flake packages.libre.computer publishes, DIR/flake (packaging/nix/ plus the
-#                   staged files at root/ and version.nix) and DIR/alsa-ucm-conf-libre-computer.tar.gz (that flake
+#                   staged files as root.tar, its links kept, and version.nix) and DIR/alsa-ucm-conf-libre-computer.tar.gz (that flake
 #                   under one top directory, Nix's tarball flakes); the builders build DIR/flake for the cache.
 #                   NixOS's alsa-ucm-conf is >= 1.2.11: --flavour overlay
 #   The rpm requires (alsa-ucm or alsa-ucm-conf): Fedora's name, then openSUSE's, so the same files install on
@@ -187,7 +187,10 @@ nix_package() { # <root> <version> <out>
   for f in flake.nix flake.lock package.nix module.nix; do
     git show "HEAD:packaging/nix/$f" >"$out/flake/$f" || die "HEAD has no packaging/nix/$f"
   done
-  cp -a "$root" "$out/flake/root"
+  # the staged tree as one plain tar member: the profiles are links, and the signing box's nix-publish takes only
+  # plain files and directories in a flake tarball (it reads every file's bytes, so a tar is still scanned)
+  tar -C "$(dirname "$root")" --owner=0 --group=0 --numeric-owner --mtime=@0 --sort=name \
+    -cf "$out/flake/root.tar" "$(basename "$root")"
   printf '"%s"\n' "$ver" >"$out/flake/version.nix"
   top=$NIX_PACKAGE-$ver
   tar -C "$out" --transform="s|^flake|$top|" --owner=0 --group=0 --numeric-owner --mtime=@0 --sort=name \

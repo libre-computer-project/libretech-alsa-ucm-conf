@@ -7,7 +7,7 @@ self:
 { config, lib, pkgs, ... }:
 let
   cfg = config.hardware.alsa.libreComputerUcm;
-  tree = (pkgs.callPackage ./package.nix { src = ./root; version = import ./version.nix; }).tree;
+  tree = (pkgs.callPackage ./package.nix { src = ./root.tar; version = import ./version.nix; }).tree;
   env = {
     ALSA_CONFIG_UCM2 = "${tree}/share/alsa/ucm2";
     ALSA_CONFIG_UCM = "${tree}/share/alsa/ucm";

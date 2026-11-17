@@ -1,4 +1,5 @@
-# alsa-ucm-conf-libre-computer: the overlay's files (src: build-overlay.sh's staged usr/share/alsa tree) under
+# alsa-ucm-conf-libre-computer: the overlay's files (src: root.tar, build-overlay.sh's staged root/usr/share/alsa
+# tree, unpacked to root/) under
 # $out/share/alsa, and passthru.tree, nixpkgs' alsa-ucm-conf (ucm, ucm2) with them copied over it. A merged COPY,
 # not a symlink join: our profiles link relatively into upstream's files (conf.d entries, the GXL profile's
 # Amlogic/p241), and a link resolves only inside one tree.
