@@ -4,7 +4,14 @@
 # distribution whose alsa-lib is not the one the whole tree targets. build.sh builds the whole tree (it replaces
 # alsa-ucm-conf; alsa-lib 1.2.14, Debian 13). Build only: nothing is installed or published.
 #
-#   build-overlay.sh --format deb|rpm|arch [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--out DIR]
+#   build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--out DIR]
+#
+#   --format nix    no package: the flake packages.libre.computer publishes, DIR/flake (packaging/nix/ plus the
+#                   staged files at root/ and version.nix) and DIR/alsa-ucm-conf-libre-computer.tar.gz (that flake
+#                   under one top directory, Nix's tarball flakes); the builders build DIR/flake for the cache.
+#                   NixOS's alsa-ucm-conf is >= 1.2.11: --flavour overlay
+#   The rpm requires (alsa-ucm or alsa-ucm-conf): Fedora's name, then openSUSE's, so one noarch build installs on
+#   both.
 #
 #   overlay         every file HEAD adds over its upstream base (the merge-base with upstream/master) under init/,
 #                   ucm/ and ucm2/, except what the compat pins restore (compat/syntax7-paths.txt: upstream
@@ -31,6 +38,7 @@ readonly OLD_PACKAGE=libretech-alsa-ucm-conf      # the name before 2026-11-10, 
 readonly DEB_PACKAGE=alsa-ucm-conf-libre-computer
 readonly RPM_PACKAGE=alsa-ucm-libre-computer
 readonly ARCH_PACKAGE=alsa-ucm-conf-libre-computer
+readonly NIX_PACKAGE=alsa-ucm-conf-libre-computer
 readonly MAINTAINER="Da Xue <da@libre.computer>"
 readonly BUILD_HOST=deb.libre.computer   # what a package header names, never the machine that built it
 readonly ARCH_PACKAGER="autobuild <autobuild@deb.libre.computer>"   # makepkg's PACKAGER
@@ -118,7 +126,7 @@ License: BSD-3-Clause
 URL: https://github.com/libre-computer-project/libretech-alsa-ucm-conf
 BuildArch: noarch
 AutoReqProv: no
-Requires: alsa-ucm
+Requires: (alsa-ucm or alsa-ucm-conf)
 # renamed from $OLD_PACKAGE (package-naming policy rule 6.5): an upgrade replaces the old name
 Obsoletes: $OLD_PACKAGE < %{version}-%{release}
 Provides: $OLD_PACKAGE = %{version}-%{release}
@@ -168,6 +176,23 @@ EOF
   echo "$out/$ARCH_PACKAGE-$ver-1-any.pkg.tar.zst"
 }
 
+nix_package() { # <root> <version> <out>
+  local root=$1 version=$2 out=$3 ver f top
+  ver=${version%%+*}   # the flavour is always overlay here: the date alone, like the other Nix flakes' versions
+  mkdir -p "$out"
+  rm -rf "$out/flake" "$out/$NIX_PACKAGE.tar.gz"
+  mkdir -p "$out/flake"
+  for f in flake.nix flake.lock package.nix module.nix; do
+    git show "HEAD:packaging/nix/$f" >"$out/flake/$f" || die "HEAD has no packaging/nix/$f"
+  done
+  cp -a "$root" "$out/flake/root"
+  printf '"%s"\n' "$ver" >"$out/flake/version.nix"
+  top=$NIX_PACKAGE-$ver
+  tar -C "$out" --transform="s|^flake|$top|" --owner=0 --group=0 --numeric-owner --mtime=@0 --sort=name \
+    -czf "$out/$NIX_PACKAGE.tar.gz" flake
+  echo "$out/$NIX_PACKAGE.tar.gz"
+}
+
 main() {
   local format="" flavour=overlay version="" out=""
   while (($#)); do
@@ -176,10 +201,11 @@ main() {
       --flavour) flavour=${2:?}; shift 2 ;;
       --version) version=${2:?}; shift 2 ;;
       --out) out=${2:?}; shift 2 ;;
-      *) die "usage: build-overlay.sh --format deb|rpm|arch [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--out DIR]" ;;
+      *) die "usage: build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--out DIR]" ;;
     esac
   done
-  case $format in deb | rpm | arch) ;; *) die "--format deb, rpm or arch" ;; esac
+  case $format in deb | rpm | arch | nix) ;; *) die "--format deb, rpm, arch or nix" ;; esac
+  [[ $format != nix || $flavour == overlay ]] || die "--format nix is the overlay flavour (NixOS's alsa-ucm-conf is >= 1.2.11)"
   case $flavour in overlay) ;; overlay-legacy) ;; *) die "--flavour overlay or overlay-legacy" ;; esac
   version=${version:-$(date -u +%Y.%m.%d)}
   [[ $version =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$ ]] || die "--version $version is not YYYY.MM.DD"
@@ -202,7 +228,7 @@ main() {
   find "$T/root" -type f -exec chmod 0644 {} +
   find "$T/root" -type d -exec chmod 0755 {} +
   local name
-  case $format in deb) name=$DEB_PACKAGE ;; rpm) name=$RPM_PACKAGE ;; arch) name=$ARCH_PACKAGE ;; esac
+  case $format in deb) name=$DEB_PACKAGE ;; rpm) name=$RPM_PACKAGE ;; arch) name=$ARCH_PACKAGE ;; nix) name=$NIX_PACKAGE ;; esac
   log "$name $version ($flavour, $n files) from $(git rev-parse --short=12 HEAD)"
   "${format}_package" "$T/root" "$version" "$out"
 }
