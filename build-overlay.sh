@@ -4,14 +4,17 @@
 # distribution whose alsa-lib is not the one the whole tree targets. build.sh builds the whole tree (it replaces
 # alsa-ucm-conf; alsa-lib 1.2.14, Debian 13). Build only: nothing is installed or published.
 #
-#   build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--out DIR]
+#   build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD]
+#                    [--dist .tw|.lp<NNN>] [--release N] [--out DIR]
 #
 #   --format nix    no package: the flake packages.libre.computer publishes, DIR/flake (packaging/nix/ plus the
 #                   staged files as root.tar, its links kept, and version.nix) and DIR/alsa-ucm-conf-libre-computer.tar.gz (that flake
 #                   under one top directory, Nix's tarball flakes); the builders build DIR/flake for the cache.
 #                   NixOS's alsa-ucm-conf is >= 1.2.11: --flavour overlay
 #   The rpm requires (alsa-ucm or alsa-ucm-conf): Fedora's name, then openSUSE's, so the same files install on
-#   both. --dist .tw|.lp<NNN> (rpm only) tags the release for one openSUSE release (1.overlay.tw): the publisher
+#   both. --release N (rpm only) [1]: a packaging fix on the same version gets a new release (2.overlay), so a
+#   published file name never changes.
+#   --dist .tw|.lp<NNN> (rpm only) tags the release for one openSUSE release (1.overlay.tw): the publisher
 #   places an openSUSE package by that tag, and an untagged build goes to Fedora.
 #
 #   overlay         every file HEAD adds over its upstream base (the merge-base with upstream/master) under init/,
@@ -50,6 +53,7 @@ die() { log "ERROR: $*"; exit 1; }
 
 T=""
 DIST=""   # --dist: the openSUSE dist tag of an rpm build
+RELEASE=1 # --release: the rpm release number, raised for a packaging fix on the same version
 cleanup() { [[ -n $T && -d $T ]] && rm -rf "$T"; return 0; }
 trap cleanup EXIT
 
@@ -114,7 +118,7 @@ EOF
 
 rpm_package() { # <root> <version> <out>
   local root=$1 version=$2 out=$3 ver rel
-  ver=${version%%+*}; rel=1.${version#*+}; rel=${rel//+/.}$DIST
+  ver=${version%%+*}; rel=$RELEASE.${version#*+}; rel=${rel//+/.}$DIST
   mkdir -p "$T/rpm/SPECS"
   {
     cat <<EOF
@@ -142,7 +146,11 @@ cp -a $root/. %{buildroot}/
 
 %files
 EOF
-    (cd "$root" && find . \( -type f -o -type l \) -printf '/%P\n' | sort)
+    # the directories it adds below share/alsa/{ucm,ucm2,init}, so an erase removes them; those three (and
+    # share/alsa) are the distribution's alsa-ucm / alsa-lib's
+    # every path quoted: upstream names carry spaces (conf.d/tegra/...), and one of ours could too
+    (cd "$root" && find . -mindepth 5 -type d -printf '%%dir "/%P"\n' | sort)
+    (cd "$root" && find . \( -type f -o -type l \) -printf '"/%P"\n' | sort)
   } >"$T/rpm/SPECS/$RPM_PACKAGE.spec"
   rpmbuild --quiet --define "_topdir $T/rpm" --define "_buildhost $BUILD_HOST" -bb "$T/rpm/SPECS/$RPM_PACKAGE.spec" >&2
   mkdir -p "$out"
@@ -207,10 +215,13 @@ main() {
       --version) version=${2:?}; shift 2 ;;
       --out) out=${2:?}; shift 2 ;;
       --dist) DIST=${2:?}; shift 2 ;;
-      *) die "usage: build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--dist .tw|.lp<NNN>] [--out DIR]" ;;
+      --release) RELEASE=${2:?}; shift 2 ;;
+      *) die "usage: build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--dist .tw|.lp<NNN>] [--release N] [--out DIR]" ;;
     esac
   done
   [[ -z $DIST || ($format == rpm && $DIST =~ ^\.(tw|lp[0-9]{3})$) ]] || die "--dist is .tw or .lp<NNN>, for --format rpm"
+  [[ $RELEASE =~ ^[1-9][0-9]{0,2}$ ]] || die "--release $RELEASE is not 1-999"
+  [[ $RELEASE == 1 || $format == rpm ]] || die "--release is for --format rpm"
   case $format in deb | rpm | arch | nix) ;; *) die "--format deb, rpm, arch or nix" ;; esac
   [[ $format != nix || $flavour == overlay ]] || die "--format nix is the overlay flavour (NixOS's alsa-ucm-conf is >= 1.2.11)"
   case $flavour in overlay) ;; overlay-legacy) ;; *) die "--flavour overlay or overlay-legacy" ;; esac
