@@ -10,8 +10,9 @@
 #                   staged files at root/ and version.nix) and DIR/alsa-ucm-conf-libre-computer.tar.gz (that flake
 #                   under one top directory, Nix's tarball flakes); the builders build DIR/flake for the cache.
 #                   NixOS's alsa-ucm-conf is >= 1.2.11: --flavour overlay
-#   The rpm requires (alsa-ucm or alsa-ucm-conf): Fedora's name, then openSUSE's, so one noarch build installs on
-#   both.
+#   The rpm requires (alsa-ucm or alsa-ucm-conf): Fedora's name, then openSUSE's, so the same files install on
+#   both. --dist .tw|.lp<NNN> (rpm only) tags the release for one openSUSE release (1.overlay.tw): the publisher
+#   places an openSUSE package by that tag, and an untagged build goes to Fedora.
 #
 #   overlay         every file HEAD adds over its upstream base (the merge-base with upstream/master) under init/,
 #                   ucm/ and ucm2/, except what the compat pins restore (compat/syntax7-paths.txt: upstream
@@ -48,6 +49,7 @@ log() { printf 'build-overlay: %s\n' "$*" >&2; }
 die() { log "ERROR: $*"; exit 1; }
 
 T=""
+DIST=""   # --dist: the openSUSE dist tag of an rpm build
 cleanup() { [[ -n $T && -d $T ]] && rm -rf "$T"; return 0; }
 trap cleanup EXIT
 
@@ -112,7 +114,7 @@ EOF
 
 rpm_package() { # <root> <version> <out>
   local root=$1 version=$2 out=$3 ver rel
-  ver=${version%%+*}; rel=1.${version#*+}; rel=${rel//+/.}
+  ver=${version%%+*}; rel=1.${version#*+}; rel=${rel//+/.}$DIST
   mkdir -p "$T/rpm/SPECS"
   {
     cat <<EOF
@@ -201,9 +203,11 @@ main() {
       --flavour) flavour=${2:?}; shift 2 ;;
       --version) version=${2:?}; shift 2 ;;
       --out) out=${2:?}; shift 2 ;;
-      *) die "usage: build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--out DIR]" ;;
+      --dist) DIST=${2:?}; shift 2 ;;
+      *) die "usage: build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--dist .tw|.lp<NNN>] [--out DIR]" ;;
     esac
   done
+  [[ -z $DIST || ($format == rpm && $DIST =~ ^\.(tw|lp[0-9]{3})$) ]] || die "--dist is .tw or .lp<NNN>, for --format rpm"
   case $format in deb | rpm | arch | nix) ;; *) die "--format deb, rpm, arch or nix" ;; esac
   [[ $format != nix || $flavour == overlay ]] || die "--format nix is the overlay flavour (NixOS's alsa-ucm-conf is >= 1.2.11)"
   case $flavour in overlay) ;; overlay-legacy) ;; *) die "--flavour overlay or overlay-legacy" ;; esac
