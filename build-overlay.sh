@@ -152,7 +152,9 @@ EOF
     (cd "$root" && find . -mindepth 5 -type d -printf '%%dir "/%P"\n' | sort)
     (cd "$root" && find . \( -type f -o -type l \) -printf '"/%P"\n' | sort)
   } >"$T/rpm/SPECS/$RPM_PACKAGE.spec"
-  rpmbuild --quiet --define "_topdir $T/rpm" --define "_buildhost $BUILD_HOST" -bb "$T/rpm/SPECS/$RPM_PACKAGE.spec" >&2
+  # vendor: the vendor zypper keeps an installed package with (the spec has no Vendor tag: rpm takes the macro)
+  rpmbuild --quiet --define "_topdir $T/rpm" --define "_buildhost $BUILD_HOST" --define "vendor Libre Computer" \
+    -bb "$T/rpm/SPECS/$RPM_PACKAGE.spec" >&2
   mkdir -p "$out"
   cp "$T/rpm/RPMS/noarch/$RPM_PACKAGE-$ver-$rel.noarch.rpm" "$out/"
   echo "$out/$RPM_PACKAGE-$ver-$rel.noarch.rpm"
