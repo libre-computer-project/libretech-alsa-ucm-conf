@@ -5,7 +5,7 @@
 # alsa-ucm-conf; alsa-lib 1.2.14, Debian 13). Build only: nothing is installed or published.
 #
 #   build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD]
-#                    [--dist .tw|.lp<NNN>] [--release N] [--out DIR]
+#                    [--dist .fc<NN>|.tw|.lp<NNN>] [--release N] [--out DIR]
 #
 #   --format nix    no package: the flake packages.libre.computer publishes, DIR/flake (packaging/nix/ plus the
 #                   staged files as root.tar, its links kept, and version.nix) and DIR/alsa-ucm-conf-libre-computer.tar.gz (that flake
@@ -14,8 +14,9 @@
 #   The rpm requires (alsa-ucm or alsa-ucm-conf): Fedora's name, then openSUSE's, so the same files install on
 #   both. --release N (rpm only) [1]: a packaging fix on the same version gets a new release (2.overlay), so a
 #   published file name never changes.
-#   --dist .tw|.lp<NNN> (rpm only) tags the release for one openSUSE release (1.overlay.tw): the publisher
-#   places an openSUSE package by that tag, and an untagged build goes to Fedora.
+#   --dist .fc<NN>|.tw|.lp<NNN> (rpm only) tags the release for one release (1.overlay.fc44, 1.overlay.tw), as
+#   each distribution tags its own noarch packages: the publisher places a package by that tag, and an untagged
+#   build goes to every Fedora release.
 #
 #   overlay         every file HEAD adds over its upstream base (the merge-base with upstream/master) under init/,
 #                   ucm/ and ucm2/, except what the compat pins restore (compat/syntax7-paths.txt: upstream
@@ -218,10 +219,11 @@ main() {
       --out) out=${2:?}; shift 2 ;;
       --dist) DIST=${2:?}; shift 2 ;;
       --release) RELEASE=${2:?}; shift 2 ;;
-      *) die "usage: build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--dist .tw|.lp<NNN>] [--release N] [--out DIR]" ;;
+      *) die "usage: build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--dist .fc<NN>|.tw|.lp<NNN>] [--release N] [--out DIR]" ;;
     esac
   done
-  [[ -z $DIST || ($format == rpm && $DIST =~ ^\.(tw|lp[0-9]{3})$) ]] || die "--dist is .tw or .lp<NNN>, for --format rpm"
+  [[ -z $DIST || ($format == rpm && $DIST =~ ^\.(fc[0-9]{2}|tw|lp[0-9]{3})$) ]] \
+    || die "--dist is .fc<NN>, .tw or .lp<NNN>, for --format rpm"
   [[ $RELEASE =~ ^[1-9][0-9]{0,2}$ ]] || die "--release $RELEASE is not 1-999"
   [[ $RELEASE == 1 || $format == rpm ]] || die "--release is for --format rpm"
   case $format in deb | rpm | arch | nix) ;; *) die "--format deb, rpm, arch or nix" ;; esac
