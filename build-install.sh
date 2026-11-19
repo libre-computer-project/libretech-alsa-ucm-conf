@@ -9,9 +9,10 @@
 # the install refuses if apt would remove any package other than alsa-ucm-conf
 # or libretech-alsa-ucm-conf.
 #
-# Entry points: build.sh (build only) | publish.sh (publish only) |
-# build-publish.sh (build, then publish) | build-install.sh (build, then
-# install on a host for testing).
+# Entry points: build.sh (build only) | build-install.sh (build, then install on
+# a host for testing). Publishing is the release process's, through the signing
+# chain to packages.libre.computer (claude infra/libre-computer/packages/
+# publishing-isolation-plan.md); nothing here publishes.
 
 set -euo pipefail
 

@@ -9,14 +9,15 @@
 # commit; the version defaults to today's UTC date (YYYY.MM.DD).
 #
 # Output: out/<version>/ holding the .deb, .changes and .buildinfo. The LAST
-# line on stdout is the path of the .changes file (publish.sh and the other
-# entry points read it); everything else goes to stderr.
+# line on stdout is the path of the .changes file (build-install.sh reads it);
+# everything else goes to stderr.
 #
 # Needs dpkg-buildpackage + debhelper. Run it on a build host, not the git host.
 #
-# Entry points: build.sh (build only) | publish.sh (publish only) |
-# build-publish.sh (build, then publish) | build-install.sh (build, then
-# install on a host for testing).
+# Entry points: build.sh (build only) | build-install.sh (build, then install on
+# a host for testing). Publishing is the release process's, through the signing
+# chain to packages.libre.computer (claude infra/libre-computer/packages/
+# publishing-isolation-plan.md); nothing here publishes.
 
 set -euo pipefail
 
