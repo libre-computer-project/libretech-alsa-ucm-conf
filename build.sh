@@ -33,10 +33,14 @@ die() { log "ERROR: $*"; exit 1; }
 
 usage() {
 	cat >&2 <<-EOF
-	usage: $0 [--version VERSION]
+	usage: $0 [--version VERSION] [--suite SUITE] [--commit SHA] [--out DIR]
 
-	Build the $PACKAGE .deb from the committed HEAD into out/<version>/.
-	  --version VERSION   package version (default: today's UTC date, YYYY.MM.DD)
+	Build the $PACKAGE .deb from the committed HEAD (or, with no .git, the exported tree this script is
+	in, whose commit --commit names) into out/<version>/ (or --out).
+	  --version VERSION   the version (default: today's UTC date, YYYY.MM.DD; the release process passes the
+	                      commit's date and commit, YYYYMMDD.HHMMSS.g<sha8>)
+	  --suite SUITE       the release (trixie): its suffix, +deb13, goes on the version, as each release's
+	                      build of this package differs and the apt pool is shared
 	EOF
 	exit 2
 }
@@ -48,32 +52,48 @@ trap cleanup EXIT
 
 # --- Orchestration ---------------------------------------------------------
 main() {
-	local version=""
+	local version="" suite="" commit="" out=""
 	while [ $# -gt 0 ]; do
 		case "$1" in
 			--version) [ $# -ge 2 ] || usage; version="$2"; shift 2 ;;
+			--suite) [ $# -ge 2 ] || usage; suite="$2"; shift 2 ;;
+			--commit) [ $# -ge 2 ] || usage; commit="$2"; shift 2 ;;
+			--out) [ $# -ge 2 ] || usage; out="$2"; shift 2 ;;
 			--help|-h) usage ;;
 			*) usage ;;
 		esac
 	done
 
-	local top
-	top=$(git -C "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" rev-parse --show-toplevel)
+	local top self tree=0
+	self=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+	if top=$(git -C "$self" rev-parse --show-toplevel 2>/dev/null); then :; else top=$self; tree=1; fi
 	cd "$top"
 	command -v dpkg-buildpackage >/dev/null || die "dpkg-buildpackage not found (install dpkg-dev + debhelper on this build host)"
 
 	version=${version:-$(date -u +%Y.%m.%d)}
-	local commit out
-	commit=$(git rev-parse HEAD)
-	out="$top/out/$version"
-	[ -e "$out" ] && die "$out exists: version $version was already built here (pass --version, or remove it)"
-	if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-		log "note: the checkout has uncommitted changes; they are NOT in the package (HEAD only)"
+	case "$suite" in
+		"") ;;
+		trixie) version+=+deb13 ;;
+		*) die "--suite: the whole tree is Debian 13's (trixie); the other releases take build-overlay.sh" ;;
+	esac
+	if [ "$tree" = 1 ]; then
+		[ -n "$commit" ] || die "an exported tree needs --commit"
+	else
+		commit=$(git rev-parse HEAD)
+		if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+			log "note: the checkout has uncommitted changes; they are NOT in the package (HEAD only)"
+		fi
 	fi
+	out=${out:-$top/out/$version}
+	[ -e "$out" ] && [ -n "$(ls -A "$out")" ] && die "$out holds a build: version $version was already built here (pass --version, or remove it)"
 
 	TMP=$(mktemp -d)
 	mkdir "$TMP/src"
-	git archive HEAD | tar -x -C "$TMP/src"
+	if [ "$tree" = 1 ]; then
+		tar -C "$top" --exclude=./out -cf - . | tar -x -C "$TMP/src"
+	else
+		git archive HEAD | tar -x -C "$TMP/src"
+	fi
 	cat > "$TMP/src/debian/changelog" <<-EOF
 	$SOURCE ($version) $DIST; urgency=medium
 

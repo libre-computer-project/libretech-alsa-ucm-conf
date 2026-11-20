@@ -58,15 +58,41 @@ RELEASE=1 # --release: the rpm release number, raised for a packaging fix on the
 cleanup() { [[ -n $T && -d $T ]] && rm -rf "$T"; return 0; }
 trap cleanup EXIT
 
-# the overlay's paths, repo-relative: what HEAD adds over the upstream base, plus the legacy list for that flavour
+# Where the source is. A git checkout: HEAD, and the upstream base from its history. Or an exported tree (git archive,
+# no .git -- the release process's build roots): its overlay file list made beforehand on the checkout
+# (--print-added, written to packaging/overlay-added.list) and its commit named by --commit.
+TREE_MODE=0
+COMMIT_ARG=""
+REPO="."
+REV=HEAD
+
+# the files the commit adds over the upstream base under init/, ucm/ and ucm2/
+added_paths() {
+  if ((TREE_MODE)); then
+    [[ -f packaging/overlay-added.list ]] ||
+      die "an exported tree needs packaging/overlay-added.list (build-overlay.sh --print-added, on the checkout)"
+    cat packaging/overlay-added.list
+  else
+    local base
+    base=$(git -C "$REPO" merge-base "$REV" upstream/master) ||
+      die "no merge-base with upstream/master (fetch the upstream remote)"
+    git -C "$REPO" diff --name-only --no-renames --diff-filter=A "$base" "$REV" -- init ucm ucm2
+  fi
+}
+
+# the overlay's paths, repo-relative: what the commit adds over the upstream base, plus the legacy list for that
+# flavour
 overlay_paths() {
-  local flavour=$1 base
-  base=$(git merge-base HEAD upstream/master) || die "no merge-base with upstream/master (fetch the upstream remote)"
+  local flavour=$1
   # the compat pins (compat/syntax7-paths.txt) re-add upstream v1.2.14 files for the whole tree: upstream's, not
   # ours, and a distro package's own copy would clash with them
   local pins
-  pins=$(git show HEAD:compat/syntax7-paths.txt | grep -v -e '^#' -e '^$')
-  git diff --name-only --no-renames --diff-filter=A "$base" HEAD -- init ucm ucm2 |
+  if ((TREE_MODE)); then
+    pins=$(grep -v -e '^#' -e '^$' compat/syntax7-paths.txt)
+  else
+    pins=$(git -C "$REPO" show "$REV:compat/syntax7-paths.txt" | grep -v -e '^#' -e '^$')
+  fi
+  added_paths |
     PINS=$pins awk 'BEGIN { n = split(ENVIRON["PINS"], p, "\n") }
       { for (i = 1; i <= n; i++) if ($0 == p[i] || index($0, p[i] "/") == 1) next; print }'
   if [[ $flavour == overlay-legacy ]]; then
@@ -76,7 +102,7 @@ overlay_paths() {
 
 deb_package() { # <root> <version> <out>
   local root=$1 version=$2 out=$3 commit
-  commit=$(git rev-parse --short=12 HEAD)
+  commit=${COMMIT_ARG:-$(git rev-parse --short=12 HEAD)}
   mkdir -p "$root/DEBIAN"
   cat >"$root/DEBIAN/control" <<EOF
 Package: $DEB_PACKAGE
@@ -119,7 +145,8 @@ EOF
 
 rpm_package() { # <root> <version> <out>
   local root=$1 version=$2 out=$3 ver rel
-  ver=${version%%+*}; rel=$RELEASE.${version#*+}; rel=${rel//+/.}$DIST
+  # the variant is the package's, not its version's (package-parity rule 6.8): Release is <n><dist tag>
+  ver=$version; rel=$RELEASE$DIST
   mkdir -p "$T/rpm/SPECS"
   {
     cat <<EOF
@@ -163,7 +190,7 @@ EOF
 
 arch_package() { # <root> <version> <out>
   local root=$1 version=$2 out=$3 ver
-  ver=${version//+/.}   # pacman: no '+' wanted in a pkgver; 2026.11.07.overlay.legacy
+  ver=$version
   mkdir -p "$T/arch"
   cp -a "$root" "$T/arch/root"
   cat >"$T/arch/PKGBUILD" <<EOF
@@ -191,12 +218,16 @@ EOF
 
 nix_package() { # <root> <version> <out>
   local root=$1 version=$2 out=$3 ver f top
-  ver=${version%%+*}   # the flavour is always overlay here: the date alone, like the other Nix flakes' versions
+  ver=$version
   mkdir -p "$out"
   rm -rf "$out/flake" "$out/$NIX_PACKAGE.tar.gz"
   mkdir -p "$out/flake"
   for f in flake.nix flake.lock package.nix module.nix; do
-    git show "HEAD:packaging/nix/$f" >"$out/flake/$f" || die "HEAD has no packaging/nix/$f"
+    if ((TREE_MODE)); then
+      cp "packaging/nix/$f" "$out/flake/$f" || die "the tree has no packaging/nix/$f"
+    else
+      git show "HEAD:packaging/nix/$f" >"$out/flake/$f" || die "HEAD has no packaging/nix/$f"
+    fi
   done
   # the staged tree as one plain tar member: the profiles are links, and the signing box's nix-publish takes only
   # plain files and directories in a flake tarball (it reads every file's bytes, so a tar is still scanned)
@@ -210,7 +241,7 @@ nix_package() { # <root> <version> <out>
 }
 
 main() {
-  local format="" flavour=overlay version="" out=""
+  local format="" flavour=overlay version="" out="" suite="" print_added=0
   while (($#)); do
     case $1 in
       --format) format=${2:?}; shift 2 ;;
@@ -219,9 +250,20 @@ main() {
       --out) out=${2:?}; shift 2 ;;
       --dist) DIST=${2:?}; shift 2 ;;
       --release) RELEASE=${2:?}; shift 2 ;;
-      *) die "usage: build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version YYYY.MM.DD] [--dist .fc<NN>|.tw|.lp<NNN>] [--release N] [--out DIR]" ;;
+      --suite) suite=${2:?}; shift 2 ;;
+      --commit) COMMIT_ARG=${2:?}; shift 2 ;;
+      # on a checkout: print the files <rev> adds over the upstream base (an exported tree's
+      # packaging/overlay-added.list), then stop
+      --print-added) print_added=1; shift ;;
+      --repo) REPO=${2:?}; shift 2 ;;
+      --rev) REV=${2:?}; shift 2 ;;
+      *) die "usage: build-overlay.sh --format deb|rpm|arch|nix [--flavour overlay|overlay-legacy] [--version V] [--suite S (deb)] [--commit SHA] [--dist .fc<NN>|.tw|.lp<NNN>] [--release N] [--out DIR] | --print-added [--repo PATH] [--rev REV]" ;;
     esac
   done
+  if ((print_added)); then
+    added_paths
+    return 0
+  fi
   [[ -z $DIST || ($format == rpm && $DIST =~ ^\.(fc[0-9]{2}|tw|lp[0-9]{3})$) ]] \
     || die "--dist is .fc<NN>, .tw or .lp<NNN>, for --format rpm"
   [[ $RELEASE =~ ^[1-9][0-9]{0,2}$ ]] || die "--release $RELEASE is not 1-999"
@@ -230,11 +272,28 @@ main() {
   [[ $format != nix || $flavour == overlay ]] || die "--format nix is the overlay flavour (NixOS's alsa-ucm-conf is >= 1.2.11)"
   case $flavour in overlay) ;; overlay-legacy) ;; *) die "--flavour overlay or overlay-legacy" ;; esac
   version=${version:-$(date -u +%Y.%m.%d)}
-  [[ $version =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$ ]] || die "--version $version is not YYYY.MM.DD"
-  version+="+${flavour/-/.}"
-  cd "$(git -C "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" rev-parse --show-toplevel)"
+  # a date (by hand), or the commit's date and the commit (the release process; package-parity rule 6.8)
+  [[ $version =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$ || $version =~ ^[0-9]{8}\.[0-9]{6}\.g[0-9a-f]{8}$ ]] ||
+    die "--version $version is not YYYY.MM.DD or YYYYMMDD.HHMMSS.g<sha8>"
+  # deb: the apt pool is shared by every suite, and each release's build differs (overlay, overlay-legacy, the whole
+  # tree on Debian 13), so each carries its release's suffix, as Debian and Ubuntu write it (+deb12, +ubuntu24.04)
+  if [[ $format == deb ]]; then
+    case $suite in
+      trixie) version+=+deb13 ;; bookworm) version+=+deb12 ;; resolute) version+=+ubuntu26.04 ;; noble) version+=+ubuntu24.04 ;;
+      *) die "--format deb needs --suite trixie, bookworm, resolute or noble" ;;
+    esac
+  fi
+  local self
+  self=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+  if git -C "$self" rev-parse --show-toplevel >/dev/null 2>&1; then
+    cd "$(git -C "$self" rev-parse --show-toplevel)"
+    [[ -z $(git status --porcelain --untracked-files=no) ]] || log "note: uncommitted changes are NOT in the package (HEAD only)"
+  else
+    cd "$self"
+    TREE_MODE=1
+    [[ -n $COMMIT_ARG ]] || die "an exported tree needs --commit"
+  fi
   out=${out:-$PWD/out/$version}
-  [[ -z $(git status --porcelain --untracked-files=no) ]] || log "note: uncommitted changes are NOT in the package (HEAD only)"
 
   T=$(mktemp -d /var/tmp/ucm-overlay.XXXXXX)
   local paths n
@@ -242,7 +301,11 @@ main() {
   n=${#paths[@]}
   ((n > 0)) || die "the overlay is empty"
   mkdir -p "$T/root/$PREFIX"
-  git archive HEAD -- "${paths[@]}" | tar -x -C "$T/root/$PREFIX"
+  if ((TREE_MODE)); then
+    tar -cf - -- "${paths[@]}" | tar -x -C "$T/root/$PREFIX"
+  else
+    git archive HEAD -- "${paths[@]}" | tar -x -C "$T/root/$PREFIX"
+  fi
   # every staged path is a regular file, a link or a directory (whether a link resolves is the install review's)
   local bad
   bad=$(cd "$T/root" && find . ! -type f ! -type l ! -type d | head -1)
@@ -251,7 +314,7 @@ main() {
   find "$T/root" -type d -exec chmod 0755 {} +
   local name
   case $format in deb) name=$DEB_PACKAGE ;; rpm) name=$RPM_PACKAGE ;; arch) name=$ARCH_PACKAGE ;; nix) name=$NIX_PACKAGE ;; esac
-  log "$name $version ($flavour, $n files) from $(git rev-parse --short=12 HEAD)"
+  log "$name $version ($flavour, $n files) from ${COMMIT_ARG:-$(git rev-parse --short=12 HEAD)}"
   "${format}_package" "$T/root" "$version" "$out"
 }
 
